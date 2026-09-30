@@ -1,0 +1,232 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Coffre — dépôt de secret</title>
+    <meta name="description" content="Chiffre un secret avant de le transmettre à l'assistant." />
+    <style>
+      :root {
+        --fond: #0f1115;
+        --carte: #171a21;
+        --bord: #262b36;
+        --texte: #e6e9ef;
+        --doux: #9aa4b5;
+        --accent: #4f8cff;
+        --ok: #3fb950;
+        --alerte: #d29922;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        padding: 24px 16px 64px;
+        background: var(--fond);
+        color: var(--texte);
+        font: 15px/1.55 system-ui, -apple-system, "Segoe UI", sans-serif;
+        display: flex;
+        justify-content: center;
+      }
+      main { width: 100%; max-width: 520px; }
+      h1 { font-size: 24px; margin: 8px 0 6px; letter-spacing: -0.5px; }
+      .intro { color: var(--doux); margin: 0 0 24px; font-size: 14px; }
+      .carte {
+        background: var(--carte);
+        border: 1px solid var(--bord);
+        border-radius: 14px;
+        padding: 20px;
+        margin-bottom: 16px;
+      }
+      label { display: block; font-size: 13px; color: var(--doux); margin-bottom: 6px; }
+      input, textarea {
+        width: 100%;
+        background: var(--fond);
+        border: 1px solid var(--bord);
+        border-radius: 9px;
+        color: var(--texte);
+        padding: 11px 12px;
+        font-size: 15px;
+        font-family: inherit;
+      }
+      input:focus, textarea:focus { outline: 2px solid var(--accent); outline-offset: -1px; border-color: transparent; }
+      textarea { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 12px; resize: vertical; word-break: break-all; }
+      .champ + .champ { margin-top: 14px; }
+      button {
+        width: 100%;
+        margin-top: 18px;
+        background: var(--accent);
+        color: #fff;
+        border: 0;
+        border-radius: 9px;
+        padding: 13px;
+        font-size: 15px;
+        font-weight: 600;
+        font-family: inherit;
+        cursor: pointer;
+      }
+      button:hover { filter: brightness(1.1); }
+      button:disabled { opacity: 0.5; cursor: default; }
+      button.secondaire { background: transparent; border: 1px solid var(--bord); color: var(--texte); margin-top: 10px; }
+      .mesure { font-size: 12px; color: var(--doux); margin-top: 6px; }
+      .mesure.trop { color: var(--alerte); }
+      #resultat[hidden], #erreur[hidden] { display: none; }
+      #erreur { color: var(--alerte); font-size: 14px; margin-top: 12px; }
+      .etat { font-size: 13px; color: var(--ok); margin-top: 10px; }
+      .etat.tres-long { color: var(--alerte); }
+      details { color: var(--doux); font-size: 13px; }
+      summary { cursor: pointer; }
+      details p { margin: 10px 0 0; }
+      code { font-family: ui-monospace, Menlo, monospace; font-size: 12px; color: var(--texte); }
+      .note { font-size: 12px; color: var(--doux); margin-top: 10px; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Coffre</h1>
+      <p class="intro">
+        Chiffre un secret avant de le transmettre. Le résultat est illisible
+        pour quiconque — y compris pour le canal par lequel il transite.
+      </p>
+
+      <form id="formulaire" class="carte">
+        <div class="champ">
+          <label for="nom">Nom du secret</label>
+          <input id="nom" name="nom" list="noms" value="github" autocomplete="off" spellcheck="false" />
+          <datalist id="noms">
+            <option>github</option>
+            <option>vercel</option>
+            <option>discord</option>
+          </datalist>
+        </div>
+
+        <div class="champ">
+          <label for="valeur">Valeur</label>
+          <input id="valeur" name="valeur" type="password" autocomplete="off" spellcheck="false" placeholder="collez le jeton ici" />
+          <p id="mesure" class="mesure">0 octet</p>
+        </div>
+
+        <button type="submit" id="bouton">Chiffrer</button>
+        <p id="erreur" hidden></p>
+      </form>
+
+      <section id="resultat" class="carte" hidden>
+        <label for="bloc">Bloc chiffré — à transmettre tel quel</label>
+        <textarea id="bloc" rows="6" readonly></textarea>
+        <button type="button" class="secondaire" id="copier">Copier le bloc</button>
+        <p class="etat" id="etat"></p>
+        <p class="note">
+          Aucune information lisible ne figure dans ce bloc. Vous pouvez le
+          transmettre par le canal que vous voulez.
+        </p>
+      </section>
+
+      <details class="carte">
+        <summary>Comment ça marche</summary>
+        <p>
+          Votre navigateur chiffre le secret avec une <strong>clé publique</strong>
+          (RSA-OAEP, 2048 bits, via l'API cryptographique du navigateur). Le
+          chiffrement se fait <strong>sur votre appareil</strong> : la valeur en
+          clair ne quitte jamais votre téléphone.
+        </p>
+        <p>
+          Seule la <strong>clé privée</strong> correspondante permet de déchiffrer,
+          et elle ne quitte pas le serveur de l'assistant. Personne d'autre — ni
+          l'hébergeur de cette page, ni le réseau, ni le service de messagerie —
+          ne peut lire le contenu.
+        </p>
+        <p>
+          Cette page est entièrement statique : aucun script tiers, aucune
+          requête vers l'extérieur, aucun stockage. Elle ne fait que chiffrer.
+        </p>
+      </details>
+    </main>
+
+    <script>
+      // Cle publique de l'assistant (SPKI, DER, base64). Publique par nature :
+      // elle ne permet que de chiffrer, jamais de dechiffrer.
+      const CLE_PUBLIQUE = "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAyOD6TdZPGJ8CGw91zXLI81uHUB90Q7wMUAKajdsa12vu1OI1kzkCRGkkxqZrYAi5jjCBYjDrO5gfD8aHcs/MDNDh9KQmMu5fhWPIrzxsjNvFTRQHSk/xiKWNm8OotvlA5Xjk7Jvdv3pdQDHaeLvC0Tb5GAzo9V4eQuFFujyyYrB4JUGUubSljybCUXc6sTOpCiR6PskKZ/9xP0DtuLyCw+Ps0SRhO9vYa2LvF/T6SbTU31hluJ2Zgnfl33ya7nyd2eJwWNpqLGSvfvl+ApNpaHjtWlWvmp02bl1mWG+n8/Bl8vwtJtfirrs9t9fh2MdWZmIBNZlEEY0TknntM71SIQIDAQAB";
+      const MAX = 190; // limite d'un message RSA-2048 avec OAEP-SHA256
+
+      const $ = (id) => document.getElementById(id);
+      const formulaire = $("formulaire");
+      const champNom = $("nom");
+      const champValeur = $("valeur");
+      const mesure = $("mesure");
+      const erreur = $("erreur");
+      const resultat = $("resultat");
+      const bloc = $("bloc");
+      const etat = $("etat");
+
+      const octets = (s) => new TextEncoder().encode(s).length;
+
+      champValeur.addEventListener("input", () => {
+        const n = octets(champValeur.value);
+        mesure.textContent = `${n} octet${n > 1 ? "s" : ""} sur ${MAX}`;
+        mesure.classList.toggle("trop", n > MAX - 20);
+      });
+
+      async function cle() {
+        const der = Uint8Array.from(atob(CLE_PUBLIQUE), (c) => c.charCodeAt(0));
+        return crypto.subtle.importKey(
+          "spki",
+          der,
+          { name: "RSA-OAEP", hash: "SHA-256" },
+          false,
+          ["encrypt"],
+        );
+      }
+
+      formulaire.addEventListener("submit", async (e) => {
+        e.preventDefault();
+        erreur.hidden = true;
+        resultat.hidden = true;
+
+        const nom = champNom.value.trim();
+        const valeur = champValeur.value;
+
+        if (!nom) return afficherErreur("Indiquez un nom pour ce secret.");
+        if (!valeur) return afficherErreur("La valeur est vide.");
+        if (!/^[a-z0-9][a-z0-9-]{0,31}$/.test(nom))
+          return afficherErreur("Le nom doit être en minuscules, sans espace ni accent.");
+
+        const charge = JSON.stringify({ nom, valeur });
+        if (octets(charge) > MAX)
+          return afficherErreur(
+            `Trop long : ${octets(charge)} octets, maximum ${MAX}.`,
+          );
+
+        try {
+          const publique = await cle();
+          const chiffre = await crypto.subtle.encrypt(
+            { name: "RSA-OAEP" },
+            publique,
+            new TextEncoder().encode(charge),
+          );
+          bloc.value = btoa(String.fromCharCode(...new Uint8Array(chiffre)));
+          resultat.hidden = false;
+          etat.textContent = `Chiffré pour « ${nom} ».`;
+          etat.classList.toggle("tres-long", bloc.value.length > 400);
+          bloc.scrollIntoView({ behavior: "smooth", block: "nearest" });
+        } catch (err) {
+          afficherErreur(`Le chiffrement a échoué : ${err.message}`);
+        }
+      });
+
+      function afficherErreur(message) {
+        erreur.textContent = message;
+        erreur.hidden = false;
+      }
+
+      $("copier").addEventListener("click", async () => {
+        bloc.select();
+        bloc.setSelectionRange(0, bloc.value.length);
+        try {
+          await navigator.clipboard.writeText(bloc.value);
+          $("copier").textContent = "Copié";
+          setTimeout(() => ($("copier").textContent = "Copier le bloc"), 2000);
+        } catch {
+          document.execCommand("copy");
+        }
+      });
+    </script>
+  </body>
+</html>
